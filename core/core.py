@@ -4,8 +4,8 @@ import numpy as np
 import networkx as nx
 from concurrent.futures import ThreadPoolExecutor
 
+
 # TODO: DIMENSIONS CAN HAVE OTHER SPACES
-# TODO: IMPLEMENT EMPTY SPACE
 
 # Dimension Class
 class Dimension:
@@ -107,11 +107,12 @@ class NonlinearTransform(Transform):
 # ConstantTransform Class
 class ConstantTransform(Transform):
     def __init__(self, name: str, codomain: Space, value: Dict[str, Any]):
-        super().__init__(name, domain=None, codomain=codomain)
+        super().__init__(name, domain=EMPTY_SPACE, codomain=codomain)
         self.value = value
     
     def apply(self, point_or_flow=None) -> Point:
         return Point(self.codomain, self.value)
+
 
 
 # Block Class
@@ -128,11 +129,19 @@ class Block:
 
     def process(self, flow: Flow) -> Flow:
         # Get the input point from the flow
-        input_point = flow.get_point(self.transform.domain.name)
-        if not input_point:
-            raise ValueError(f"Input point '{self.transform.domain.name}' not found in flow.")
-        # Apply the transform
-        output_point = self.transform.apply(input_point)
+        if self.transform.domain == EMPTY_SPACE:
+            # For EMPTY_SPACE, ensure no input point is provided
+            if flow.get_point(self.transform.domain.name) is not None:
+                raise ValueError(f"Input point for '{self.name}' should be None for EMPTY_SPACE, but got {flow.get_point(self.transform.domain.name)}")
+            # Apply the transform without an input point
+            output_point = self.transform.apply()
+        else:
+            input_point = flow.get_point(self.transform.domain.name)
+            if not input_point:
+                raise ValueError(f"Input point '{self.transform.domain.name}' not found in flow for block '{self.name}'.")
+            # Apply the transform
+            output_point = self.transform.apply(input_point)
+        
         # Create new flow with the output point
         new_flow = Flow(flow.points.copy())
         new_flow.add_point(self.transform.codomain.name, output_point)
@@ -140,7 +149,7 @@ class Block:
 
     def __repr__(self):
         return f"Block(name={self.name}, transform={self.transform.name})"
-    
+
 # CompositeBlock Class
 class CompositeBlock(Block):
     def __init__(self, name: str, internal_blocks: List[Block], connections: List[tuple], input_spaces: List[Space], output_spaces: List[Space]):
@@ -271,3 +280,5 @@ class Pipeline:
 
     def __repr__(self):
         return f"Pipeline(blocks={list(self.blocks.keys())})"
+
+EMPTY_SPACE = Space(name='EmptySpace', dimensions=[])
